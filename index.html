@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoidSignal | Advanced RF Research</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Dark Theme Defaults */
+            --bg-deep: #010615;
+            --bg-panel: rgba(12, 20, 40, 0.65);
+            --bg-panel-hover: rgba(18, 28, 52, 0.8);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --neon-blue: #3b82f6;
+            --neon-cyan: #06b6d4;
+            --neon-red: #ef4444;
+            --shadow-glow-blue: 0 0 60px rgba(59, 130, 246, 0.12);
+            --shadow-glow-red: 0 0 60px rgba(239, 68, 68, 0.15);
+            --particle-color: rgba(148, 163, 184, 0.5);
+            --line-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .light-mode {
+            /* Light Theme Overrides */
+            --bg-deep: #f8fafc;
+            --bg-panel: rgba(255, 255, 255, 0.75);
+            --bg-panel-hover: rgba(255, 255, 255, 0.95);
+            --glass-bg: rgba(0, 0, 0, 0.03);
+            --glass-border: rgba(0, 0, 0, 0.1);
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --neon-blue: #2563eb;
+            --neon-cyan: #0891b2;
+            --neon-red: #dc2626;
+            --shadow-glow-blue: 0 10px 40px rgba(37, 99, 235, 0.15);
+            --shadow-glow-red: 0 10px 40px rgba(220, 38, 38, 0.15);
+            --particle-color: rgba(15, 23, 42, 0.2);
+            --line-color: rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-deep);
+            color: var(--text-primary);
+            scroll-behavior: smooth;
+            cursor: default;
+            overflow-x: hidden;
+            transition: background-color 0.5s ease, color 0.5s ease;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .grotesk { font-family: 'Space Grotesk', sans-serif; }
+
+        /* Helpers for dynamic variables */
+        .text-primary { color: var(--text-primary); transition: color 0.3s; }
+        .text-secondary { color: var(--text-secondary); transition: color 0.3s; }
+        .bg-dynamic-panel { background: var(--bg-panel); transition: background 0.3s; border-color: var(--glass-border); }
+        .border-dynamic { border-color: var(--glass-border); transition: border-color 0.3s; }
+        .bg-glass { background: var(--glass-bg); transition: background 0.3s; }
+
+        /* ============ ANIMATED BACKGROUND ============ */
+        #particleCanvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none; opacity: 0.6;
+        }
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; pointer-events: none;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--line-color) 2px, var(--line-color) 4px);
+            opacity: 0.6; transition: background 0.5s ease;
+        }
+
+        /* ============ GLASS PANEL ============ */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(24px) saturate(140%);
+            border: 1px solid var(--glass-border);
+            transition: all 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+            position: relative; z-index: 10;
+        }
+        .glass-panel:hover {
+            background: var(--bg-panel-hover);
+            box-shadow: var(--shadow-glow-blue);
+        }
+
+        /* ============ RADAR & SWEEP ============ */
+        .radar-container { position: relative; display: inline-block; width: 140px; height: 140px; overflow: hidden; border-radius: 50%; }
+        .radar-ring {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border-radius: 50%; border: 2px solid var(--neon-blue); opacity: 0;
+            pointer-events: none; animation: radar-expand 3s ease-out infinite;
+        }
+        .radar-ring:nth-child(2) { animation-delay: 1s; }
+        .radar-ring:nth-child(3) { animation-delay: 2s; }
+        .radar-ring.jamming { border-color: var(--neon-red); animation-duration: 1.5s; }
+        @keyframes radar-expand {
+            0% { width: 20px; height: 20px; opacity: 1; border-width: 3px; }
+            100% { width: 300px; height: 300px; opacity: 0; border-width: 0.5px; }
+        }
+        
+        .radar-sweep {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 70%, rgba(59, 130, 246, 0.6) 100%);
+            animation: sweep 2s linear infinite;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .radar-sweep.jamming {
+            background: conic-gradient(from 0deg, transparent 70%, rgba(239, 68, 68, 0.7) 100%);
+            animation-duration: 0.8s;
+        }
+        @keyframes sweep { to { transform: rotate(360deg); } }
+
+        /* ============ SPECTRUM ANALYZER ============ */
+        .spectrum-bar {
+            width: 8px; border-radius: 4px; background: var(--neon-cyan);
+            transform-origin: bottom; animation: eq 0.8s ease-in-out infinite alternate;
+        }
+        .spectrum-bar.jamming-eq { background: var(--neon-red); animation-duration: 0.2s; }
+        @keyframes eq {
+            0% { transform: scaleY(0.2); }
+            100% { transform: scaleY(1); }
+        }
+
+        /* ============ TABS ============ */
+        .tab-content {
+            display: none; opacity: 0; transform: translateY(10px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .tab-content.active { display: block; opacity: 1; transform: translateY(0); }
+
+        /* ============ GLITCH ============ */
+        .jammed-glitch {
+            color: var(--neon-red) !important;
+            animation: smooth-jam-pulse 1.5s ease-in-out infinite alternate;
+        }
+        @keyframes smooth-jam-pulse {
+            0% { transform: translateX(0); text-shadow: 0 0 8px rgba(239, 68, 68, 0.4); opacity: 1; }
+            50% { transform: translateX(1px); text-shadow: -1.5px 0 var(--neon-cyan), 1.5px 0 var(--neon-red), 0 0 15px rgba(239, 68, 68, 0.8); opacity: 0.85; }
+            100% { transform: translateX(-1px); text-shadow: 1.5px 0 var(--neon-cyan), -1.5px 0 var(--neon-red), 0 0 8px rgba(239, 68, 68, 0.4); opacity: 1; }
+        }
+
+        /* ============ CONTROLS ============ */
+        .toggle-btn {
+            transition: all 0.3s ease; border: 1px solid var(--glass-border);
+        }
+        .toggle-btn.active-scan { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.5); color: var(--neon-blue); box-shadow: inset 0 0 15px rgba(59, 130, 246, 0.2); }
+        .toggle-btn.active-jam { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.5); color: var(--neon-red); box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.2); animation: pulse-red 1s infinite alternate; }
+        
+        @keyframes pulse-red {
+            to { box-shadow: inset 0 0 25px rgba(239, 68, 68, 0.4), 0 0 20px rgba(239, 68, 68, 0.2); }
+        }
+
+        /* ============ JAM OVERLAY ============ */
+        #jamOverlay {
+            pointer-events: none; z-index: 99;
+            background: radial-gradient(ellipse at center, transparent 30%, rgba(239, 68, 68, 0.08) 70%, rgba(239, 68, 68, 0.18) 100%),
+                        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(239, 68, 68, 0.03) 3px, rgba(239, 68, 68, 0.03) 6px);
+            opacity: 0; transition: opacity 0.9s ease-in-out;
+        }
+        #jamOverlay.active { opacity: 0.22; }
+
+        /* TERMINAL */
+        #terminal-output::-webkit-scrollbar { width: 4px; }
+        #terminal-output::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 4px; }
+        .log-line { animation: fade-in 0.3s ease-out forwards; opacity: 0; transform: translateX(-10px); }
+        @keyframes fade-in { to { opacity: 1; transform: translateX(0); } }
+
+        /* MODAL */
+        #aiModal { transition: opacity 0.3s ease; }
+        #aiModal.show { opacity: 1; pointer-events: auto; }
+        #aiModalContent { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #aiModal.show #aiModalContent { transform: scale(1); }
+
+        #hardwareAiModal { transition: opacity 0.3s ease; }
+        #hardwareAiModal.show { opacity: 1; pointer-events: auto; }
+        #hardwareAiModalContent { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #hardwareAiModal.show #hardwareAiModalContent { transform: scale(1); }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="particleCanvas"></canvas>
+    <div class="scanlines"></div>
+    <div id="jamOverlay" class="fixed inset-0"></div>
+
+    <!-- Sidebar -->
+    <aside class="fixed left-0 top-0 h-full w-20 flex flex-col items-center py-8 glass-panel z-50 border-r border-dynamic">
+        <div class="mb-10 text-primary">
+            <svg class="w-8 h-8 animate-pulse text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        </div>
+        
+        <nav class="space-y-6 flex-1 w-full flex flex-col items-center">
+            <!-- Tabs -->
+            <button onclick="switchTab('intro')" class="p-3 text-secondary hover:text-blue-500 transition-colors w-12 h-12 flex items-center justify-center rounded-xl bg-glass border border-transparent hover:border-dynamic" title="Introduction">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+            </button>
+            <button onclick="switchTab('dashboard')" class="p-3 text-secondary hover:text-blue-500 transition-colors w-12 h-12 flex items-center justify-center rounded-xl bg-glass border border-transparent hover:border-dynamic" title="Dashboard">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" /></svg>
+            </button>
+            <button onclick="switchTab('simulator')" class="p-3 text-secondary hover:text-blue-500 transition-colors w-12 h-12 flex items-center justify-center rounded-xl bg-glass border border-transparent hover:border-dynamic" title="Simulator & Spectrum">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+            </button>
+        </nav>
+
+        <div class="mt-auto space-y-4 flex flex-col items-center">
+            <!-- Theme Toggle -->
+            <button onclick="toggleTheme()" class="p-3 text-secondary hover:text-amber-500 transition-colors w-12 h-12 flex items-center justify-center rounded-xl bg-glass border border-transparent hover:border-dynamic" title="Toggle Theme">
+                <svg id="theme-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            </button>
+            <div class="w-3 h-3 rounded-full bg-green-500/80 shadow-[0_0_10px_rgba(34,197,94,0.8)] animate-pulse"></div>
+        </div>
+    </aside>
+
+    <main class="pl-20 relative z-10 min-h-screen">
+        
+        <!-- HEADER -->
+        <header class="pt-16 pb-8 px-8 md:px-14 border-b border-dynamic relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+            <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <h1 class="text-4xl font-black tracking-tighter mb-2 grotesk text-primary flex items-center gap-3">
+                        VoidSignal <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-cyan-400">PLATFORM</span>
+                    </h1>
+                    <p class="text-secondary text-sm">ESP32 Dual-Band RF Analysis & Simulation Tool</p>
+                </div>
+                <div class="flex gap-3">
+                    <div class="px-4 py-2 glass-panel rounded-lg text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div> 5 GHz Ready
+                    </div>
+                    <div class="px-4 py-2 glass-panel rounded-lg text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-cyan-500 animate-pulse delay-75"></div> Wi-Fi 6 Support
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ================= TAB: INTRODUCTION ================= -->
+        <section id="tab-intro" class="tab-content active px-6 md:px-14 py-10 max-w-6xl mx-auto">
+            <h2 class="text-3xl font-black mb-8 grotesk text-primary flex items-center gap-3">
+                <svg class="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                Introduction to Wi-Fi Jamming
+            </h2>
+            
+            <div class="glass-panel p-8 rounded-[2rem] mb-8 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-[300px] h-[300px] bg-blue-500/10 rounded-full blur-[80px] pointer-events-none -translate-y-1/2 translate-x-1/2"></div>
+                <h3 class="text-xl font-bold text-primary grotesk mb-4 relative z-10">What is a Wi-Fi Jammer?</h3>
+                <p class="text-secondary leading-relaxed mb-6 relative z-10">A Wi-Fi jammer is a device that transmits radio signals on the same frequencies as Wi-Fi (typically 2.4 GHz or 5 GHz) to create interference, disrupting or blocking communication between Wi-Fi routers and connected devices like phones, laptops, or IoT devices.</p>
+                <p class="text-secondary leading-relaxed relative z-10">The circuit simulation shared in this dashboard — utilizing an <strong class="text-cyan-400 font-bold">ESP32</strong> and two <strong class="text-cyan-400 font-bold">NRF24L01+</strong> modules — represents one possible low‑power implementation for the 2.4 GHz band (used by Wi-Fi, Bluetooth, Zigbee, and many wireless devices). The NRF24L01+ can be programmed to send continuous or random packets, flooding the channel and preventing legitimate devices from communicating.</p>
+            </div>
+
+            <h3 class="text-2xl font-black mb-6 grotesk text-primary flex items-center flex-wrap gap-3">
+                Uses / Applications 
+                <span class="text-[10px] font-bold text-cyan-500 uppercase tracking-widest bg-cyan-500/10 px-3 py-1.5 rounded border border-cyan-500/20">(Legal & Defensive)</span>
+            </h3>
+            
+            <p class="text-secondary mb-6 italic text-sm">While jammers are illegal for general use, understanding their operation helps in:</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 1. Testing Network Resilience -->
+                <div class="glass-panel p-6 rounded-3xl border-t-4 border-t-cyan-500 hover:-translate-y-1 transition-transform">
+                    <h4 class="font-bold text-primary mb-3 text-sm flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs">1</span>
+                        Testing Network Resilience
+                    </h4>
+                    <p class="text-xs text-secondary leading-relaxed">Security professionals use controlled jamming to test how well a Wi‑Fi network handles interference. Helps improve protocols (e.g., frequency hopping, channel switching).</p>
+                </div>
+                <!-- 2. Military / Law Enforcement -->
+                <div class="glass-panel p-6 rounded-3xl border-t-4 border-t-blue-500 hover:-translate-y-1 transition-transform">
+                    <h4 class="font-bold text-primary mb-3 text-sm flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs">2</span>
+                        Military / Law Enforcement
+                    </h4>
+                    <p class="text-xs text-secondary leading-relaxed">Disabling remote detonators (IEDs) that use 2.4 GHz links. Preventing unauthorized drone control or surveillance in sensitive areas.</p>
+                </div>
+                <!-- 3. Exam Halls / Secure Facilities -->
+                <div class="glass-panel p-6 rounded-3xl border-t-4 border-t-indigo-500 hover:-translate-y-1 transition-transform">
+                    <h4 class="font-bold text-primary mb-3 text-sm flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs">3</span>
+                        Exam Halls & Secure Facilities
+                    </h4>
+                    <p class="text-xs text-secondary leading-relaxed mb-2">Blocking cheating via wireless devices. (Hypothetical)</p>
+                    <p class="text-[10px] text-amber-500/80 italic border-l-2 border-amber-500/50 pl-2">Note: Usually done with shielded rooms or managed access points, not illegal jammers.</p>
+                </div>
+                <!-- 4. Protecting Against Jammers -->
+                <div class="glass-panel p-6 rounded-3xl border-t-4 border-t-purple-500 hover:-translate-y-1 transition-transform">
+                    <h4 class="font-bold text-primary mb-3 text-sm flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs">4</span>
+                        Protecting Against Jammers
+                    </h4>
+                    <p class="text-xs text-secondary leading-relaxed">Understanding jamming techniques allows engineers to design anti‑jamming methods (e.g., FHSS, DSSS, adaptive hopping).</p>
+                </div>
+                <!-- 5. RF Education & Research -->
+                <div class="glass-panel p-6 rounded-3xl border-t-4 border-t-pink-500 md:col-span-2 hover:-translate-y-1 transition-transform">
+                    <h4 class="font-bold text-primary mb-3 text-sm flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-pink-500/20 text-pink-400 flex items-center justify-center text-xs">5</span>
+                        RF Education & Research
+                    </h4>
+                    <p class="text-xs text-secondary leading-relaxed">Learning how interference affects communication protocols. Building spectrum analyzers or detection systems that alert when jamming occurs.</p>
+                </div>
+            </div>
+
+            <!-- COMPONENTS SECTION -->
+            <h3 class="text-2xl font-black mt-14 mb-6 grotesk text-primary flex items-center flex-wrap gap-3">
+                Required Hardware 
+                <span class="text-[10px] font-bold text-blue-500 uppercase tracking-widest bg-blue-500/10 px-3 py-1.5 rounded border border-blue-500/20">Bill of Materials</span>
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- ESP32 -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-cyan-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">ESP32 NodeMCU</h4>
+                        <p class="text-[11px] text-secondary leading-tight">The main microcontroller that operates on the 2.4 GHz frequency.</p>
+                    </div>
+                </div>
+
+                <!-- NRF24L01 -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-blue-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">NRF24L01 Modules</h4>
+                        <p class="text-[11px] text-secondary leading-tight">Two modules used as transmitters and receivers to boost the wireless signal.</p>
+                    </div>
+                </div>
+
+                <!-- Capacitors -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-indigo-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v10M16 7v10M4 12h4m8 0h4" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">10µF Capacitors</h4>
+                        <p class="text-[11px] text-secondary leading-tight">Two capacitors (10µF, 50V/16V) to stabilize power delivery to the RF modules.</p>
+                    </div>
+                </div>
+
+                <!-- Pin Headers -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-amber-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16M8 4v4m8-4v4M8 10v4m8-4v4M8 16v4m8-4v4" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">Pin Headers</h4>
+                        <p class="text-[11px] text-secondary leading-tight">Used for mounting components to avoid direct soldering on the main board.</p>
+                    </div>
+                </div>
+
+                <!-- Battery -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-green-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2 12h2m16 0h2M6 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8zm6-1v2" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">3.3V Battery</h4>
+                        <p class="text-[11px] text-secondary leading-tight">The primary portable power source for the project.</p>
+                    </div>
+                </div>
+
+                <!-- Charging Module -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-pink-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-pink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">Charging Module</h4>
+                        <p class="text-[11px] text-secondary leading-tight">Circuitry to safely manage the battery charging process.</p>
+                    </div>
+                </div>
+
+                <!-- LED & Resistor -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-red-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">LED & 1K Resistor</h4>
+                        <p class="text-[11px] text-secondary leading-tight">An LED to act as a power indicator, paired with a 1K resistor to limit current.</p>
+                    </div>
+                </div>
+
+                <!-- Zero PCB -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-teal-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-teal-400" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="6" cy="6" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="18" cy="6" r="1.5"/>
+                            <circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>
+                            <circle cx="6" cy="18" r="1.5"/><circle cx="12" cy="18" r="1.5"/><circle cx="18" cy="18" r="1.5"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">Zero PCB</h4>
+                        <p class="text-[11px] text-secondary leading-tight">A prototyping board used to mount and physically connect all the electronic components.</p>
+                    </div>
+                </div>
+
+                <!-- Jumper / Switch -->
+                <div class="glass-panel p-5 rounded-2xl group hover:bg-white/[0.02] transition-colors flex items-start gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-800/50 border border-dynamic flex items-center justify-center shrink-0 group-hover:border-orange-500/50 transition-colors">
+                        <svg class="w-8 h-8 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-primary text-sm mb-1">Jumper / Switch</h4>
+                        <p class="text-[11px] text-secondary leading-tight">Used to control the power flow and toggle the device on and off.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HOW IT WORKS SECTION -->
+            <h3 class="text-2xl font-black mt-16 mb-6 grotesk text-primary flex items-center flex-wrap gap-3">
+                How Does a WiFi Jammer Actually Work? 
+                <span class="text-[10px] font-bold text-red-500 uppercase tracking-widest bg-red-500/10 px-3 py-1.5 rounded border border-red-500/20">Concepts</span>
+            </h3>
+            
+            <!-- Interactive Simulation -->
+            <div class="glass-panel p-6 md:p-8 rounded-[2rem] mb-10">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <h4 class="font-bold text-primary text-lg grotesk">WiFi Jammer Simulation</h4>
+                    <div class="flex gap-6 text-[10px] font-mono text-secondary uppercase tracking-widest bg-deep p-3 rounded-xl border border-dynamic">
+                        <div class="flex flex-col">STATUS <span id="cStatus" class="text-green-400 font-bold text-xs mt-1 transition-colors">CONNECTED</span></div>
+                        <div class="flex flex-col">SIGNAL <span id="cSignal" class="text-primary font-bold text-xs mt-1 transition-colors">100%</span></div>
+                        <div class="flex flex-col">PACKETS SENT <span id="cPackets" class="text-primary font-bold text-xs mt-1 transition-colors">0</span></div>
+                    </div>
+                </div>
+                <div class="bg-deep rounded-2xl border border-dynamic h-64 md:h-72 relative mb-6 overflow-hidden shadow-inner">
+                    <canvas id="conceptCanvas" class="absolute inset-0 w-full h-full"></canvas>
+                </div>
+                <div class="flex justify-between items-center bg-glass p-4 rounded-xl border border-dynamic">
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-bold text-primary">Jammer Active</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="cJamToggle" class="sr-only peer" onchange="toggleConceptJam(this.checked)">
+                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500 border border-dynamic shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]"></div>
+                        </label>
+                    </div>
+                    <button onclick="resetConcept()" class="px-5 py-2.5 bg-slate-800/50 border border-dynamic rounded-xl text-xs font-bold text-secondary hover:text-white hover:bg-slate-700/50 transition-colors uppercase tracking-widest">Clear History</button>
+                </div>
+            </div>
+
+            <div class="space-y-6 mt-4">
+                <!-- Step 1 -->
+                <div class="glass-panel p-6 rounded-2xl relative overflow-hidden group">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)]"></div>
+                    <h4 class="font-bold text-primary text-lg mb-3 flex items-center gap-3">
+                        <span class="text-amber-400 font-mono bg-amber-500/10 px-2 py-1 rounded text-sm">01</span>
+                        The "Megaphone" Analogy
+                    </h4>
+                    <p class="text-sm text-secondary leading-relaxed pl-12">Imagine you and a friend are standing across a quiet room, having a perfectly clear conversation. You can hear every word they say.</p>
+                    <p class="text-sm text-secondary leading-relaxed pl-12 mt-2">Now, imagine someone walks into the very center of the room with a giant megaphone and starts shouting random, deafening static at the top of their lungs. Suddenly, you can't hear your friend at all. They are still talking, but their voice is completely drowned out by the chaos.</p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="glass-panel p-6 rounded-2xl relative overflow-hidden group">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)]"></div>
+                    <h4 class="font-bold text-primary text-lg mb-3 flex items-center gap-3">
+                        <span class="text-blue-400 font-mono bg-blue-500/10 px-2 py-1 rounded text-sm">02</span>
+                        The Technology Behind It
+                    </h4>
+                    <p class="text-sm text-secondary leading-relaxed pl-12">That is exactly what a WiFi or Bluetooth jammer does!</p>
+                    <p class="text-sm text-secondary leading-relaxed pl-12 mt-2">Your devices (like your phone, wireless earbuds, and WiFi router) talk to each other using invisible radio waves. A jammer acts exactly like the person with the megaphone. When turned on, it floods the local area with an overwhelming amount of meaningless electronic "noise."</p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="glass-panel p-6 rounded-2xl relative overflow-hidden group">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.6)]"></div>
+                    <h4 class="font-bold text-primary text-lg mb-3 flex items-center gap-3">
+                        <span class="text-red-400 font-mono bg-red-500/10 px-2 py-1 rounded text-sm">03</span>
+                        The Result
+                    </h4>
+                    <p class="text-sm text-secondary leading-relaxed pl-12">Because the airwaves become totally crowded with this junk data, your devices can no longer pick out the signals they actually need. They get confused, realize they can't understand the "conversation" anymore, and instantly drop the connection.</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ================= TAB: DASHBOARD ================= -->
+        <section id="tab-dashboard" class="tab-content px-6 md:px-14 py-10 max-w-7xl mx-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Controls Panel -->
+                <div class="lg:col-span-4 space-y-6">
+                    <div class="glass-panel p-6 rounded-[2rem]">
+                        <h3 class="text-[10px] font-bold text-secondary uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
+                            Engine Controls
+                            <span class="px-2 py-1 bg-glass rounded text-[9px] text-blue-400 border border-blue-500/20">v2.1</span>
+                        </h3>
+                        
+                        <!-- Radar Vis -->
+                        <div class="flex justify-center mb-8">
+                            <div class="radar-container bg-glass border border-dynamic flex items-center justify-center">
+                                <div id="radarSweep" class="radar-sweep"></div>
+                                <div id="radarRing1" class="radar-ring"></div>
+                                <div id="radarRing2" class="radar-ring"></div>
+                                <div id="radarRing3" class="radar-ring"></div>
+                                <svg class="w-10 h-10 text-blue-500 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" /></svg>
+                            </div>
+                        </div>
+
+                        <!-- Scan Controls -->
+                        <div class="mb-5">
+                            <p class="text-xs font-bold text-primary mb-3 grotesk">Packet Scanner</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button id="btnScanOn" onclick="setScan(true)" class="toggle-btn py-3 rounded-xl text-xs font-bold text-secondary uppercase tracking-widest hover:bg-glass">ON</button>
+                                <button id="btnScanOff" onclick="setScan(false)" class="toggle-btn py-3 rounded-xl text-xs font-bold uppercase tracking-widest active-scan">OFF</button>
+                            </div>
+                        </div>
+
+                        <!-- Jam Controls -->
+                        <div class="pt-5 border-t border-dynamic">
+                            <div class="flex justify-between items-center mb-3">
+                                <p class="text-xs font-bold text-primary grotesk">Interference Generator</p>
+                                <span id="jamIntensityDisplay" class="text-[10px] font-mono text-red-500 hidden">80%</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 mb-4">
+                                <button id="btnJamOn" onclick="setJam(true)" disabled class="toggle-btn py-3 rounded-xl text-xs font-bold text-secondary uppercase tracking-widest opacity-50 cursor-not-allowed">ON</button>
+                                <button id="btnJamOff" onclick="setJam(false)" disabled class="toggle-btn py-3 rounded-xl text-xs font-bold uppercase tracking-widest active-jam opacity-50 cursor-not-allowed">OFF</button>
+                            </div>
+                            
+                            <div id="intensitySliderContainer" class="hidden transition-opacity space-y-4">
+                                <div>
+                                    <p class="text-[9px] text-secondary uppercase tracking-widest mb-2 flex justify-between">Power Intensity</p>
+                                    <input type="range" id="jamIntensity" min="10" max="100" value="80" class="w-full h-1.5 bg-glass rounded-lg appearance-none cursor-pointer accent-red-500">
+                                </div>
+                                <div>
+                                    <p class="text-[9px] text-secondary uppercase tracking-widest mb-1 flex justify-between">Attack Vector</p>
+                                    <select id="jamModeSelect" class="w-full bg-deep border border-dynamic text-secondary text-xs rounded-lg p-2.5 outline-none font-mono">
+                                        <option value="deauth">Deauth Injection [Direct]</option>
+                                        <option value="beacon">Beacon Flood [Noise]</option>
+                                        <option value="rts">RTS/CTS Flood [Collision]</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-red-400 mt-3 text-center hidden" id="jamWarning">⚠ Requires active scan to engage.</p>
+                        </div>
+                    </div>
+
+                    <!-- Hardware Sim Grid -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="glass-panel p-5 rounded-[1.5rem] text-center">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1">Targets</p>
+                            <p id="count" class="text-3xl font-mono tracking-tighter font-bold text-primary">0</p>
+                        </div>
+                        <div class="glass-panel p-5 rounded-[1.5rem] text-center flex flex-col justify-center relative overflow-hidden group">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Noise Floor</p>
+                            <p id="noise" class="text-3xl font-mono text-blue-500 tracking-tighter font-bold z-10 relative">-96 <span class="text-[9px] text-secondary">dBm</span></p>
+                            <canvas id="noiseChart" class="absolute bottom-0 left-0 w-full h-12 opacity-40 group-hover:opacity-80 transition-opacity"></canvas>
+                        </div>
+                        <div class="glass-panel p-5 rounded-[1.5rem] text-center transition-colors duration-500 relative overflow-hidden group" id="tempPanel">
+                            <button onclick="openHardwareAiModal()" class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 bg-blue-500/20 text-cyan-400 border border-cyan-500/30 rounded text-[8px] font-bold uppercase hover:bg-blue-500/40 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] z-20">✨ Diagnose</button>
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Core Temp</p>
+                            <p id="tempDisplay" class="text-3xl font-mono tracking-tighter font-bold text-primary transition-colors duration-500 z-10 relative">35.0<span class="text-[12px] text-secondary">°C</span></p>
+                            <canvas id="tempChart" class="absolute bottom-0 left-0 w-full h-12 opacity-40 group-hover:opacity-80 transition-opacity"></canvas>
+                        </div>
+                        <div class="glass-panel p-5 rounded-[1.5rem] text-center transition-colors duration-500 relative overflow-hidden group" id="batteryPanel">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Power</p>
+                            <p id="batteryDisplay" class="text-3xl font-mono tracking-tighter font-bold text-green-400 transition-colors duration-500 z-10 relative">100<span class="text-[12px] text-secondary">%</span></p>
+                            <canvas id="batteryChart" class="absolute bottom-0 left-0 w-full h-12 opacity-40 group-hover:opacity-80 transition-opacity"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network List -->
+                <div class="lg:col-span-8">
+                    <div class="glass-panel rounded-[2rem] overflow-hidden min-h-[600px] flex flex-col">
+                        <div class="px-8 py-5 border-b border-dynamic flex justify-between items-center bg-glass flex-wrap gap-4">
+                            <div>
+                                <h4 class="font-bold text-xs tracking-widest uppercase text-secondary flex items-center gap-2 mb-1">
+                                    <span class="w-2 h-2 rounded-full bg-blue-500" id="listDot"></span>
+                                    Network Traffic
+                                </h4>
+                                <div class="text-[9px] font-mono text-secondary flex gap-4">
+                                    <span>RX (Capt): <span id="rxPackets" class="text-blue-400 font-bold">0</span></span>
+                                    <span>TX (Inj): <span id="txPackets" class="text-red-400 font-bold">0</span></span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-3">
+                                <button onclick="exportCSV()" class="px-4 py-2 bg-glass border border-dynamic rounded-xl text-[10px] font-bold uppercase tracking-widest hover:border-blue-500/50 hover:text-blue-400 transition-all">
+                                    📥 Export CSV
+                                </button>
+                                <button id="btnAiAnalyze" onclick="openAiModal()" class="hidden px-4 py-2 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:from-blue-500/30 hover:to-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all">
+                                    ✨ Threat Analysis
+                                </button>
+                                <span class="text-[10px] text-secondary font-bold uppercase tracking-widest px-3 py-2 bg-glass rounded-xl border border-dynamic" id="statusBadge">IDLE</span>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto flex-1 p-2">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-left text-secondary text-[9px] uppercase font-bold tracking-[0.15em] border-b border-dynamic">
+                                        <th class="px-6 py-4">SSID / MAC</th>
+                                        <th class="px-6 py-4">Vendor Fingerprint</th>
+                                        <th class="px-6 py-4">Band</th>
+                                        <th class="px-6 py-4">Signal Power</th>
+                                        <th class="px-6 py-4">System State</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="networkList" class="divide-y divide-white/5">
+                                    <tr id="emptyRow">
+                                        <td colspan="5" class="px-10 py-32 text-center">
+                                            <div class="text-secondary italic font-medium text-sm">Initialize scanner to populate data stream...</div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TAB: SIMULATOR ================= -->
+        <section id="tab-simulator" class="tab-content px-6 md:px-14 py-10 max-w-7xl mx-auto">
+            <div class="glass-panel rounded-[2rem] overflow-hidden">
+                <div class="px-8 py-5 border-b border-dynamic bg-glass">
+                    <h3 class="text-sm font-bold text-primary grotesk">Advanced RF Simulation Environment</h3>
+                </div>
+                
+                <div class="p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Spectrum Vis -->
+                    <div class="space-y-4">
+                        <h4 class="text-[10px] font-bold text-secondary uppercase tracking-[0.2em]">Live Spectrum Analyzer (2.4GHz - 5GHz)</h4>
+                        <div class="h-64 bg-deep rounded-2xl border border-dynamic p-6 flex items-end justify-between gap-1 overflow-hidden relative" id="spectrumContainer">
+                            <!-- JS generates bars here -->
+                            <div class="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10 transition-opacity" id="spectrumOverlay">
+                                <span class="text-xs font-mono text-secondary">AWAITING SENSOR DATA</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terminal & Telemetry Output -->
+                    <div class="space-y-4 flex flex-col h-full">
+                        <h4 class="text-[10px] font-bold text-secondary uppercase tracking-[0.2em]">SPI Interface Logs & Telemetry</h4>
+                        <div class="flex flex-col gap-4 flex-1">
+                            <div class="flex-1 min-h-[10rem] bg-[#050B14] rounded-2xl border border-dynamic p-4 font-mono text-xs overflow-y-auto" id="terminal-output">
+                                <div class="text-green-500 mb-2">VoidSignal OS v2.1.0 initializing...</div>
+                                <div class="text-blue-400 mb-2">> System Standby.</div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 h-24">
+                                <div class="bg-deep rounded-2xl border border-dynamic p-3 relative overflow-hidden group">
+                                    <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">CPU Load</p>
+                                    <p id="cpuDisplay" class="text-xl font-mono tracking-tighter font-bold text-cyan-400 z-10 relative">12%</p>
+                                    <canvas id="cpuChart" class="absolute bottom-0 left-0 w-full h-12 opacity-40 group-hover:opacity-80 transition-opacity"></canvas>
+                                </div>
+                                <div class="bg-deep rounded-2xl border border-dynamic p-3 relative overflow-hidden group">
+                                    <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Heap RAM</p>
+                                    <p id="memDisplay" class="text-xl font-mono tracking-tighter font-bold text-indigo-400 z-10 relative">42%</p>
+                                    <canvas id="memChart" class="absolute bottom-0 left-0 w-full h-12 opacity-40 group-hover:opacity-80 transition-opacity"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Educational RF Concepts Section -->
+                <div class="px-8 pb-8 pt-6 mt-4 border-t border-dynamic bg-glass/30">
+                    <h3 class="text-xs font-bold text-primary grotesk mb-6 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Educational RF Telemetry Diagrams
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        
+                        <!-- 1. Signal Strength vs Distance -->
+                        <div class="bg-deep rounded-2xl border border-dynamic p-4 relative overflow-hidden group">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Signal vs Distance</p>
+                            <p class="text-[9px] text-muted mb-2 z-10 relative leading-tight">Inverse square law degradation</p>
+                            <canvas id="eduSignalChart" class="w-full h-20 opacity-70 group-hover:opacity-100 transition-opacity"></canvas>
+                        </div>
+                        
+                        <!-- 2. SNR -->
+                        <div class="bg-deep rounded-2xl border border-dynamic p-4 relative overflow-hidden group">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Signal-to-Noise Ratio</p>
+                            <p class="text-[9px] text-muted mb-2 z-10 relative leading-tight">Signal power over noise floor</p>
+                            <canvas id="eduSnrChart" class="w-full h-20 opacity-70 group-hover:opacity-100 transition-opacity"></canvas>
+                        </div>
+                        
+                        <!-- 3. Throughput -->
+                        <div class="bg-deep rounded-2xl border border-dynamic p-4 relative overflow-hidden group">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Data Throughput vs Distance</p>
+                            <p class="text-[9px] text-muted mb-2 z-10 relative leading-tight">Bandwidth steps (MCS index drop)</p>
+                            <canvas id="eduThroughputChart" class="w-full h-20 opacity-70 group-hover:opacity-100 transition-opacity"></canvas>
+                        </div>
+                        
+                        <!-- 4. Frequency Overlap -->
+                        <div class="bg-deep rounded-2xl border border-dynamic p-4 relative overflow-hidden group">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">2.4GHz Channel Overlap</p>
+                            <p class="text-[9px] text-muted mb-2 z-10 relative leading-tight">Interference in 802.11 b/g/n</p>
+                            <canvas id="eduOverlapChart" class="w-full h-20 opacity-70 group-hover:opacity-100 transition-opacity"></canvas>
+                        </div>
+                        
+                        <!-- 5. Topology -->
+                        <div class="bg-deep rounded-2xl border border-dynamic p-4 relative overflow-hidden group lg:col-span-2">
+                            <p class="text-[9px] font-bold text-secondary uppercase tracking-widest mb-1 z-10 relative">Network Topology</p>
+                            <p class="text-[9px] text-muted mb-2 z-10 relative leading-tight">Client-to-AP Association</p>
+                            <canvas id="eduTopologyChart" class="w-full h-20 opacity-70 group-hover:opacity-100 transition-opacity"></canvas>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================= AI MODAL ================= -->
+    <div id="aiModal" class="fixed inset-0 z-[100] hidden flex-col items-center justify-center bg-black/60 backdrop-blur-md opacity-0 pointer-events-none">
+        <div class="glass-panel bg-[#050b14] p-8 rounded-[2rem] max-w-3xl w-full mx-4 border border-blue-500/30 shadow-[0_0_50px_rgba(6,182,212,0.15)] transform scale-95" id="aiModalContent">
+            <div class="flex justify-between items-center mb-6 border-b border-dynamic pb-4">
+                <h3 class="text-xl font-bold grotesk text-cyan-400 flex items-center gap-3">
+                    ✨ Vulnerability Intelligence Report
+                </h3>
+                <button onclick="closeAiModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-glass text-secondary hover:text-red-400 transition-colors">✕</button>
+            </div>
+            
+            <div id="aiLoading" class="hidden flex-col items-center justify-center py-16">
+                <div class="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mb-6"></div>
+                <p class="text-cyan-400 text-sm font-mono animate-pulse tracking-widest uppercase">Gemini LLM analyzing RF Telemetry...</p>
+            </div>
+
+            <div id="aiReport" class="text-sm text-primary leading-relaxed space-y-4 font-mono max-h-[60vh] overflow-y-auto pr-2 hidden">
+                <!-- Report populated here -->
+            </div>
+            
+            <div id="aiError" class="hidden py-10 text-center">
+                <p class="text-red-400 font-mono text-sm">Error establishing connection to neural framework.</p>
+                <p class="text-secondary text-xs mt-2" id="aiErrorText"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= HARDWARE AI MODAL ================= -->
+    <div id="hardwareAiModal" class="fixed inset-0 z-[100] hidden flex-col items-center justify-center bg-black/60 backdrop-blur-md opacity-0 pointer-events-none">
+        <div class="glass-panel bg-[#050b14] p-8 rounded-[2rem] max-w-3xl w-full mx-4 border border-blue-500/30 shadow-[0_0_50px_rgba(6,182,212,0.15)] transform scale-95" id="hardwareAiModalContent">
+            <div class="flex justify-between items-center mb-6 border-b border-dynamic pb-4">
+                <h3 class="text-xl font-bold grotesk text-cyan-400 flex items-center gap-3">
+                    ✨ Hardware Diagnostics & Thermal Analysis
+                </h3>
+                <button onclick="closeHardwareAiModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-glass text-secondary hover:text-red-400 transition-colors">✕</button>
+            </div>
+            
+            <div id="hardwareAiLoading" class="hidden flex-col items-center justify-center py-16">
+                <div class="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mb-6"></div>
+                <p class="text-cyan-400 text-sm font-mono animate-pulse tracking-widest uppercase">Gemini LLM analyzing ESP32 Telemetry...</p>
+            </div>
+
+            <div id="hardwareAiReport" class="text-sm text-primary leading-relaxed space-y-4 font-mono max-h-[60vh] overflow-y-auto pr-2 hidden">
+                <!-- Report populated here -->
+            </div>
+            
+            <div id="hardwareAiError" class="hidden py-10 text-center">
+                <p class="text-red-400 font-mono text-sm">Error establishing connection to neural framework.</p>
+                <p class="text-secondary text-xs mt-2" id="hardwareAiErrorText"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ GEMINI API INTEGRATION ============
+        const apiKey = ""; // Provided by execution environment
+        
+        async function fetchWithRetry(url, options, retries = 5) {
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return await response.json();
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delays[i]));
+                }
+            }
+        }
+
+        function openAiModal() {
+            const modal = document.getElementById('aiModal');
+            modal.classList.remove('hidden');
+            // Trigger reflow for animation
+            void modal.offsetWidth; 
+            modal.classList.add('show');
+            
+            runAiAnalysis();
+        }
+
+        function closeAiModal() {
+            const modal = document.getElementById('aiModal');
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300); // match CSS transition duration
+        }
+
+        async function runAiAnalysis() {
+            const loading = document.getElementById('aiLoading');
+            const report = document.getElementById('aiReport');
+            const errorContainer = document.getElementById('aiError');
+            
+            loading.classList.remove('hidden');
+            loading.classList.add('flex');
+            report.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+            report.innerHTML = '';
+
+            const systemPrompt = "You are a highly advanced cyber-security AI embedded inside an ESP32 RF analysis dashboard. Your job is to analyze the local Wi-Fi networks discovered by the scanner and generate a brief, highly technical penetration testing / vulnerability assessment report based on their signal strength (dBm) and frequencies (2.4GHz vs 5GHz/Wi-Fi 6). Do NOT use markdown headers, only use bold text for emphasis using **. Keep it concise, maximum 3 short paragraphs. Act like an AI assistant to a security researcher.";
+            const userPrompt = `Here is the JSON array of the currently discovered networks: ${JSON.stringify(state.currentScanList)}`;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            try {
+                const result = await fetchWithRetry(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if(text) {
+                    // Format response (replace ** with styled spans, \n with <br>)
+                    const formattedText = text
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-cyan-300">$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em class="text-blue-300">$1</em>')
+                        .replace(/\n/g, '<br/>');
+                    
+                    report.innerHTML = formattedText;
+                    loading.classList.add('hidden');
+                    loading.classList.remove('flex');
+                    report.classList.remove('hidden');
+                } else {
+                    throw new Error("No text returned from Gemini API.");
+                }
+            } catch (err) {
+                loading.classList.add('hidden');
+                loading.classList.remove('flex');
+                errorContainer.classList.remove('hidden');
+                document.getElementById('aiErrorText').innerText = err.message;
+            }
+        }
+
+        function openHardwareAiModal() {
+            const modal = document.getElementById('hardwareAiModal');
+            modal.classList.remove('hidden');
+            void modal.offsetWidth; 
+            modal.classList.add('show');
+            
+            runHardwareAiAnalysis();
+        }
+
+        function closeHardwareAiModal() {
+            const modal = document.getElementById('hardwareAiModal');
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        async function runHardwareAiAnalysis() {
+            const loading = document.getElementById('hardwareAiLoading');
+            const report = document.getElementById('hardwareAiReport');
+            const errorContainer = document.getElementById('hardwareAiError');
+            
+            loading.classList.remove('hidden');
+            loading.classList.add('flex');
+            report.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+            report.innerHTML = '';
+
+            const intensity = document.getElementById('jamIntensity')?.value || 0;
+            const mode = state.jamming ? (document.getElementById('jamModeSelect')?.value || 'unknown') : 'standby';
+
+            const systemPrompt = "You are a hardware diagnostic AI for an ESP32 RF device. You analyze real-time telemetry and provide a short, highly technical assessment (max 2 paragraphs). Assess thermal state, battery drain, and general hardware efficiency based on the provided metrics. Suggest cooling, duty-cycle optimizations, or power management strategies. Use **bolding** for emphasis, no markdown headers.";
+            const userPrompt = `Current Telemetry:
+            - Core Temp: ${state.temp.toFixed(1)}°C
+            - Battery: ${state.battery.toFixed(1)}%
+            - System State: ${state.jamming ? 'Active Jamming' : (state.scanning ? 'Active Scanning' : 'Idle')}
+            - Attack Mode: ${mode}
+            - Power Intensity: ${intensity}%
+            - TX Packets (Injected): ${state.txPackets}
+            - RX Packets (Captured): ${state.rxPackets}`;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            try {
+                const result = await fetchWithRetry(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if(text) {
+                    const formattedText = text
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-cyan-300">$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em class="text-blue-300">$1</em>')
+                        .replace(/\n/g, '<br/>');
+                    
+                    report.innerHTML = formattedText;
+                    loading.classList.add('hidden');
+                    loading.classList.remove('flex');
+                    report.classList.remove('hidden');
+                } else {
+                    throw new Error("No text returned from Gemini API.");
+                }
+            } catch (err) {
+                loading.classList.add('hidden');
+                loading.classList.remove('flex');
+                errorContainer.classList.remove('hidden');
+                document.getElementById('hardwareAiErrorText').innerText = err.message;
+            }
+        }
+
+        // ============ TABS ============
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+        }
+
+        // ============ THEME TOGGLE ============
+        let isLightMode = false;
+        function toggleTheme() {
+            isLightMode = !isLightMode;
+            document.body.classList.toggle('light-mode', isLightMode);
+            const icon = document.getElementById('theme-icon');
+            if(isLightMode) {
+                icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />`;
+            } else {
+                icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />`;
+            }
+        }
+
+        // ============ PARTICLES ============
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Resize educational canvases
+            ['eduSignalChart', 'eduSnrChart', 'eduThroughputChart', 'eduOverlapChart', 'eduTopologyChart'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el && el.parentElement) {
+                    el.width = el.parentElement.clientWidth - 32;
+                    el.height = 80;
+                }
+            });
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.s = Math.random() * 1.5 + 0.5;
+                this.vx = (Math.random() - 0.5) * 0.4;
+                this.vy = (Math.random() - 0.5) * 0.4;
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                if(this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) this.reset();
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.s, 0, Math.PI * 2);
+                const colorStr = getComputedStyle(document.body).getPropertyValue('--particle-color').trim() || 'rgba(148, 163, 184, 0.5)';
+                ctx.fillStyle = colorStr;
+                ctx.fill();
+            }
+        }
+        for(let i=0; i<50; i++) particles.push(new Particle());
+        
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // ============ SPECTRUM VISUALIZER GENERATION ============
+        const spectrumContainer = document.getElementById('spectrumContainer');
+        const bars = [];
+        for(let i=0; i<30; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'spectrum-bar';
+            bar.style.animationDelay = `${Math.random() * 0.5}s`;
+            bar.style.height = `${Math.random() * 80 + 10}%`;
+            bar.style.animationPlayState = 'paused';
+            spectrumContainer.appendChild(bar);
+            bars.push(bar);
+        }
+
+        // ============ EDUCATIONAL GRAPHS ============
+        let eduTime = 0;
+        function animateEducationalGraphs() {
+            requestAnimationFrame(animateEducationalGraphs);
+            const simTab = document.getElementById('tab-simulator');
+            if (!simTab || !simTab.classList.contains('active')) return;
+            
+            eduTime += 0.03;
+            const isLight = document.body.classList.contains('light-mode');
+            const axisColor = isLight ? '#cbd5e1' : '#334155';
+            const textCol = isLight ? '#64748b' : '#94a3b8';
+
+            // 1. Signal vs Distance
+            const cSig = document.getElementById('eduSignalChart');
+            if (cSig && cSig.width) {
+                const ctxSig = cSig.getContext('2d');
+                ctxSig.clearRect(0,0, cSig.width, cSig.height);
+                ctxSig.beginPath();
+                for(let x=0; x<=cSig.width; x+=2) {
+                    let d = (x / cSig.width) * 10 + 1; // distance 1 to 11
+                    let y = cSig.height - (100 / (d * d)) * (cSig.height / 100);
+                    ctxSig.lineTo(x, Math.min(y, cSig.height-2));
+                }
+                ctxSig.strokeStyle = '#3b82f6'; ctxSig.lineWidth = 2; ctxSig.stroke();
+                
+                // Animated pulse
+                let prog = (eduTime * 0.4) % 1;
+                let dPulse = prog * 10 + 1;
+                let yPulse = cSig.height - (100 / (dPulse * dPulse)) * (cSig.height / 100);
+                ctxSig.beginPath();
+                ctxSig.arc(prog * cSig.width, Math.min(yPulse, cSig.height-2), 4, 0, Math.PI*2);
+                ctxSig.fillStyle = '#ffffff';
+                ctxSig.fill();
+            }
+
+            // 2. SNR
+            const cSnr = document.getElementById('eduSnrChart');
+            if (cSnr && cSnr.width) {
+                const ctxSnr = cSnr.getContext('2d');
+                ctxSnr.clearRect(0,0, cSnr.width, cSnr.height);
+                // Animated Noise floor
+                ctxSnr.beginPath();
+                for(let x=0; x<=cSnr.width; x+=5) ctxSnr.lineTo(x, cSnr.height - 15 + Math.random()*8);
+                ctxSnr.lineTo(cSnr.width, cSnr.height); ctxSnr.lineTo(0, cSnr.height);
+                ctxSnr.fillStyle = 'rgba(239, 68, 68, 0.2)'; ctxSnr.fill();
+                // Animated Signal line
+                ctxSnr.beginPath();
+                for(let x=0; x<=cSnr.width; x+=5) ctxSnr.lineTo(x, 20 + Math.sin(x/20 - eduTime*2)*10);
+                ctxSnr.strokeStyle = '#4ade80'; ctxSnr.lineWidth = 2; ctxSnr.stroke();
+                // Label
+                ctxSnr.fillStyle = textCol; ctxSnr.font = '10px monospace';
+                ctxSnr.fillText('Signal', 5, 12); ctxSnr.fillText('Noise', 5, cSnr.height - 5);
+            }
+
+            // 3. Throughput vs Distance
+            const cThr = document.getElementById('eduThroughputChart');
+            if (cThr && cThr.width) {
+                const ctxThr = cThr.getContext('2d');
+                ctxThr.clearRect(0,0, cThr.width, cThr.height);
+                ctxThr.beginPath();
+                ctxThr.moveTo(0, 10);
+                const steps = 5;
+                for(let i=0; i<steps; i++) {
+                    let startX = (cThr.width / steps) * i;
+                    let endX = (cThr.width / steps) * (i + 1);
+                    let y = 10 + (cThr.height / steps) * i;
+                    ctxThr.lineTo(startX, y); ctxThr.lineTo(endX, y);
+                }
+                ctxThr.strokeStyle = '#06b6d4'; ctxThr.lineWidth = 2; ctxThr.stroke();
+
+                // Animated Packets
+                let progThr = (eduTime * 0.6) % 1;
+                let stepIdx = Math.floor(progThr * steps);
+                let pxThr = progThr * cThr.width;
+                let pyThr = 10 + (cThr.height / steps) * stepIdx;
+                ctxThr.beginPath(); ctxThr.arc(pxThr, pyThr, 4, 0, Math.PI*2);
+                ctxThr.fillStyle = '#ffffff'; ctxThr.fill();
+            }
+
+            // 4. Overlap
+            const cOvl = document.getElementById('eduOverlapChart');
+            if (cOvl && cOvl.width) {
+                const ctxOvl = cOvl.getContext('2d');
+                ctxOvl.clearRect(0,0, cOvl.width, cOvl.height);
+                
+                const drawBell = (x, w, col) => {
+                    ctxOvl.beginPath();
+                    ctxOvl.moveTo(x - w, cOvl.height);
+                    ctxOvl.bezierCurveTo(x - w/2, cOvl.height, x - w/2, 10, x, 10);
+                    ctxOvl.bezierCurveTo(x + w/2, 10, x + w/2, cOvl.height, x + w, cOvl.height);
+                    ctxOvl.fillStyle = col; ctxOvl.fill();
+                    ctxOvl.strokeStyle = col.replace(/[\d.]+\)$/g, '0.8)'); ctxOvl.stroke();
+                };
+                let w = cOvl.width / 4;
+                drawBell(cOvl.width*0.2, w, 'rgba(59, 130, 246, 0.3)'); // Ch1
+                drawBell(cOvl.width*0.5, w, 'rgba(59, 130, 246, 0.3)'); // Ch6
+                drawBell(cOvl.width*0.8, w, 'rgba(59, 130, 246, 0.3)'); // Ch11
+                
+                // Pulsing interference
+                let jamPulse = Math.sin(eduTime * 4) * 0.15 + 0.25; // 0.1 to 0.4
+                drawBell(cOvl.width*0.35, w, `rgba(239, 68, 68, ${jamPulse})`); 
+            }
+
+            // 5. Topology
+            const cTop = document.getElementById('eduTopologyChart');
+            if (cTop && cTop.width) {
+                const ctxTop = cTop.getContext('2d');
+                ctxTop.clearRect(0,0, cTop.width, cTop.height);
+                
+                const cx = cTop.width / 2; const cy = cTop.height / 2;
+                const nodes = [-0.8, -0.3, 0.2, 0.7, 1.2, 1.7].map(a => ({
+                    x: cx + Math.cos(a * Math.PI) * (cTop.width/3),
+                    y: cy + Math.sin(a * Math.PI) * (cTop.height/2.5)
+                }));
+                
+                ctxTop.strokeStyle = axisColor; ctxTop.lineWidth = 1;
+                nodes.forEach(n => {
+                    ctxTop.beginPath(); ctxTop.moveTo(cx, cy); ctxTop.lineTo(n.x, n.y); ctxTop.stroke();
+                });
+                
+                // Draw AP
+                ctxTop.beginPath(); ctxTop.arc(cx, cy, 12, 0, Math.PI*2);
+                ctxTop.fillStyle = '#3b82f6'; ctxTop.fill();
+                
+                // Draw Clients
+                ctxTop.fillStyle = isLight ? '#94a3b8' : '#cbd5e1';
+                nodes.forEach(n => {
+                    ctxTop.beginPath(); ctxTop.arc(n.x, n.y, 5, 0, Math.PI*2); ctxTop.fill();
+                });
+
+                // Animated Packets
+                let progTop = (eduTime * 0.8) % 1;
+                nodes.forEach((n, i) => {
+                    let offsetProg = (progTop + (i * 0.2)) % 1;
+                    let nx = cx + (n.x - cx) * offsetProg;
+                    let ny = cy + (n.y - cy) * offsetProg;
+                    ctxTop.beginPath(); ctxTop.arc(nx, ny, 2.5, 0, Math.PI*2);
+                    ctxTop.fillStyle = i % 2 === 0 ? '#4ade80' : '#22d3ee';
+                    ctxTop.fill();
+                });
+            }
+        }
+        animateEducationalGraphs(); // Start animation loop
+
+        // ============ LOGIC & STATE ============
+        const networks = [
+            { ssid: "Samsung S24 Ultra", strength: -35, channel: "5 GHz", bssid: "EE:55:FF:66:AA:77", vendor: "Samsung Electronics" },
+            { ssid: "Max Hotspot", strength: -48, channel: "2.4 GHz", bssid: "FF:66:AA:77:BB:88", vendor: "Apple Inc." },
+            { ssid: "NETGEAR_WIFI6_EXT", strength: -62, channel: "Wi-Fi 6", bssid: "CC:33:DD:44:EE:55", vendor: "Netgear Inc." },
+            { ssid: "iPhone 15 Pro", strength: -68, channel: "5 GHz", bssid: "BB:22:CC:33:DD:44", vendor: "Apple Inc." },
+            { ssid: "OPPO Reno 10 (Hotspot)", strength: -75, channel: "2.4 GHz", bssid: "AA:11:BB:22:CC:33", vendor: "OPPO Mobile" },
+            { ssid: "AndroidAP_0911", strength: -82, channel: "2.4 GHz", bssid: "DD:44:EE:55:FF:66", vendor: "Google/Android" },
+            { ssid: "MITE INCUBATION", strength: -88, channel: "Wi-Fi 6", bssid: "00:A0:C9:14:C8:29", vendor: "Cisco Systems" },
+            { ssid: "MITE EXAM", strength: -92, channel: "5 GHz", bssid: "BC:CF:CC:21:44:A1", vendor: "Aruba Networks" },
+            { ssid: "MITE INNOVATION", strength: -95, channel: "Wi-Fi 6", bssid: "00:24:A5:DD:1F:B1", vendor: "Cisco Systems" },
+            { ssid: "OnePlus 11 Hotspot", strength: -70, channel: "2.4 GHz", bssid: "1A:2B:3C:4D:5E:6F", vendor: "OnePlus Technology" },
+            { ssid: "ASUS_ROG_5G", strength: -55, channel: "5 GHz", bssid: "99:88:77:66:55:44", vendor: "ASUSTek Computer" },
+            { ssid: "Dell XPS 15 Hotspot", strength: -52, channel: "5 GHz", bssid: "D4:3D:7E:11:22:33", vendor: "Dell Inc." },
+            { ssid: "Inspiron-7000", strength: -66, channel: "2.4 GHz", bssid: "D4:3D:7E:AA:BB:CC", vendor: "Dell Inc." },
+            { ssid: "Latitude_7420_Net", strength: -72, channel: "Wi-Fi 6", bssid: "D4:3D:7E:99:88:77", vendor: "Dell Inc." },
+            { ssid: "Alienware_M16_AP", strength: -40, channel: "5 GHz", bssid: "D4:3D:7E:55:44:33", vendor: "Dell Inc." },
+            { ssid: "Hidden Network", strength: -85, channel: "2.4 GHz", bssid: "00:00:00:00:00:00", vendor: "Unknown Vendor" },
+            { ssid: "DIRECT-Roku-TV", strength: -45, channel: "5 GHz", bssid: "AA:BB:CC:DD:EE:FF", vendor: "Roku Inc." }
+        ];
+
+        let state = {
+            scanning: false,
+            jamming: false,
+            scanTimer: null,
+            idx: 0,
+            currentScanList: [],
+            autoJamTimer: null,
+            rxPackets: 0,
+            txPackets: 0,
+            temp: 28.5,
+            battery: 100.0
+        };
+
+        function logTerminal(msg, type="info") {
+            const term = document.getElementById('terminal-output');
+            const line = document.createElement('div');
+            line.className = 'log-line mb-1';
+            
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
+            let color = 'text-slate-400';
+            if(type === 'success') color = 'text-green-400';
+            if(type === 'error' || type === 'warn') color = 'text-red-400';
+            if(type === 'highlight') color = 'text-cyan-400';
+
+            line.innerHTML = `<span class="text-slate-600">[${time}]</span> <span class="${color}">${msg}</span>`;
+            if (term) {
+                term.appendChild(line);
+                term.scrollTop = term.scrollHeight;
+            }
+        }
+
+        function setScan(status) {
+            if(state.scanning === status) return;
+            state.scanning = status;
+
+            // UI Buttons
+            document.getElementById('btnScanOn')?.classList.toggle('active-scan', status);
+            document.getElementById('btnScanOff')?.classList.toggle('active-scan', !status);
+            
+            // Jammer Button enablement
+            const jamOn = document.getElementById('btnJamOn');
+            const jamOff = document.getElementById('btnJamOff');
+            const jamWarn = document.getElementById('jamWarning');
+            const btnAi = document.getElementById('btnAiAnalyze');
+            
+            if(status) {
+                if(jamOn) { jamOn.disabled = false; jamOn.classList.remove('opacity-50', 'cursor-not-allowed'); }
+                if(jamOff) { jamOff.disabled = false; jamOff.classList.remove('opacity-50', 'cursor-not-allowed'); }
+                if(jamWarn) {
+                    jamWarn.innerText = "Auto-engaging interference in 3 seconds...";
+                    jamWarn.classList.replace('text-red-400', 'text-amber-400');
+                    jamWarn.classList.remove('hidden');
+                }
+                if(btnAi) btnAi.classList.add('hidden');
+
+                // Auto engage jammer after 3 seconds
+                state.autoJamTimer = setTimeout(() => {
+                    if (state.scanning && !state.jamming) {
+                        setJam(true);
+                        if (jamWarn) jamWarn.classList.add('hidden');
+                    }
+                }, 3000);
+
+            } else {
+                if (state.autoJamTimer) { clearTimeout(state.autoJamTimer); state.autoJamTimer = null; }
+                setJam(false);
+                if(jamOn) { jamOn.disabled = true; jamOn.classList.add('opacity-50', 'cursor-not-allowed'); }
+                if(jamOff) { jamOff.disabled = true; jamOff.classList.add('opacity-50', 'cursor-not-allowed'); }
+                if(jamWarn) {
+                    jamWarn.innerText = "⚠ Requires active scan to engage.";
+                    jamWarn.classList.replace('text-amber-400', 'text-red-400');
+                    jamWarn.classList.remove('hidden');
+                }
+            }
+
+            // Radar & Overlay
+            document.querySelectorAll('.radar-ring').forEach(r => r.style.opacity = status ? '1' : '0');
+            const radarSweep = document.getElementById('radarSweep');
+            if (radarSweep) radarSweep.style.opacity = status ? '1' : '0';
+
+            const overlay = document.getElementById('spectrumOverlay');
+            if(overlay) overlay.style.opacity = status ? '0' : '1';
+            
+            // Spectrum Animation
+            bars.forEach(b => { if (b) b.style.animationPlayState = status ? 'running' : 'paused'; });
+
+            const listDot = document.getElementById('listDot');
+            const badge = document.getElementById('statusBadge');
+
+            if (status) {
+                logTerminal('Initiating HSPI interface...', 'highlight');
+                logTerminal('Hopping channels 1-13 (2.4G) and 36-165 (5G)...');
+                
+                if (listDot) listDot.classList.add('animate-pulse');
+                if (badge) {
+                    badge.innerText = 'SCANNING';
+                    badge.className = 'text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded border border-blue-500/30 text-blue-500 bg-blue-500/10';
+                }
+                
+                const networkList = document.getElementById('networkList');
+                if (networkList) networkList.innerHTML = '';
+                document.getElementById('emptyRow')?.classList.add('hidden');
+                
+                // Randomize network subset for this scan
+                const targetCount = Math.floor(Math.random() * 7) + 8;
+                state.currentScanList = [...networks].sort(() => 0.5 - Math.random()).slice(0, targetCount);
+                state.currentScanList.sort((a, b) => b.strength - a.strength);
+
+                state.idx = 0;
+                state.rxPackets = 0;
+                document.getElementById('count').innerText = 0;
+
+                state.scanTimer = setInterval(() => {
+                    if(state.idx < state.currentScanList.length) {
+                        const currentNet = state.currentScanList[state.idx];
+                        renderRow(currentNet);
+                        logTerminal(`Captured Beacon: ${currentNet.ssid} [${currentNet.strength}dBm]`);
+                        state.idx++;
+                        const countElem = document.getElementById('count');
+                        if (countElem) countElem.innerText = state.idx;
+                    } else {
+                        clearInterval(state.scanTimer);
+                        if (badge) {
+                            badge.innerText = 'COMPLETED';
+                            badge.className = 'text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-xl border border-cyan-500/30 text-cyan-500 bg-cyan-500/10';
+                        }
+                        logTerminal(`Scan cycle complete. ${state.currentScanList.length} targets discovered.`, 'success');
+                        if(btnAi) btnAi.classList.remove('hidden');
+                    }
+                }, 400);
+            } else {
+                clearInterval(state.scanTimer);
+                if (listDot) listDot.classList.remove('animate-pulse');
+                if (badge) {
+                    badge.innerText = 'IDLE';
+                    badge.className = 'text-[10px] text-secondary font-bold uppercase tracking-widest px-3 py-2 bg-glass rounded-xl border border-dynamic';
+                }
+                logTerminal('Scanner halted. Radio idle.');
+            }
+        }
+
+        function setJam(status) {
+            if(state.jamming === status || (!state.scanning && status)) return;
+            state.jamming = status;
+
+            document.getElementById('btnJamOn')?.classList.toggle('active-jam', status);
+            document.getElementById('btnJamOff')?.classList.toggle('active-jam', !status);
+
+            const overlay = document.getElementById('jamOverlay');
+            const sliderContainer = document.getElementById('intensitySliderContainer');
+            const intensityDisplay = document.getElementById('jamIntensityDisplay');
+            const radarSweep = document.getElementById('radarSweep');
+            const jamMode = document.getElementById('jamModeSelect')?.value || 'deauth';
+
+            if(status) {
+                logTerminal(`ENGAGING ${jamMode.toUpperCase()} VECTOR`, 'warn');
+                logTerminal('Broadcasting malformed frames across discovered channels...', 'error');
+                
+                if (overlay) overlay.classList.add('active');
+                if (sliderContainer) sliderContainer.classList.remove('hidden');
+                if (intensityDisplay) intensityDisplay.classList.remove('hidden');
+                
+                document.querySelectorAll('.radar-ring').forEach(r => r.classList.add('jamming'));
+                if(radarSweep) radarSweep.classList.add('jamming');
+                
+                bars.forEach(b => b?.classList.add('jamming-eq'));
+                document.querySelectorAll('.ssid-name').forEach(el => el.classList.add('jammed-glitch'));
+                
+                document.querySelectorAll('.stat-pill').forEach(el => {
+                    el.innerText = "BLOCKED";
+                    el.className = "stat-pill px-3 py-1 bg-red-500/10 text-red-500 rounded text-[9px] font-black uppercase tracking-widest border border-red-500/30";
+                });
+                document.querySelectorAll('.signal-bar').forEach(el => el.style.background = 'var(--neon-red)');
+            } else {
+                logTerminal('Ceasing interference transmission.', 'success');
+                
+                if (overlay) overlay.classList.remove('active');
+                if (sliderContainer) sliderContainer.classList.add('hidden');
+                if (intensityDisplay) intensityDisplay.classList.add('hidden');
+                
+                document.querySelectorAll('.radar-ring').forEach(r => r.classList.remove('jamming'));
+                if(radarSweep) radarSweep.classList.remove('jamming');
+
+                bars.forEach(b => b?.classList.remove('jamming-eq'));
+                document.querySelectorAll('.ssid-name').forEach(el => el.classList.remove('jammed-glitch'));
+                
+                document.querySelectorAll('.stat-pill').forEach(el => {
+                    el.innerText = "AUTH";
+                    el.className = "stat-pill px-3 py-1 bg-blue-500/10 text-blue-500 rounded text-[9px] font-black uppercase tracking-widest border border-blue-500/30";
+                });
+                document.querySelectorAll('.signal-bar').forEach(el => el.style.background = 'var(--neon-blue)');
+            }
+        }
+
+        function renderRow(net) {
+            const list = document.getElementById('networkList');
+            if (!list) return;
+
+            const row = document.createElement('tr');
+            row.className = "network-row hover:bg-glass transition-all border-b border-dynamic text-primary";
+            
+            const strengthPercent = Math.min(100, Math.abs(net.strength) / 90 * 100);
+            const b1 = Math.min(100, strengthPercent);
+            const b2 = Math.min(100, strengthPercent * 0.7);
+            const b3 = Math.min(100, strengthPercent * 0.4);
+
+            let label = "Weak";
+            if (net.strength >= -50) label = "Excellent";
+            else if (net.strength >= -65) label = "Strong";
+            else if (net.strength >= -80) label = "Moderate";
+
+            const jammedColor = state.jamming ? 'var(--neon-red)' : 'var(--neon-blue)';
+            const glitchClass = state.jamming ? 'jammed-glitch' : '';
+            const statText = state.jamming ? 'BLOCKED' : 'AUTH';
+            const statClass = state.jamming ? 'bg-red-500/10 text-red-500 border-red-500/30' : 'bg-blue-500/10 text-blue-500 border-blue-500/30';
+
+            row.innerHTML = `
+                <td class="px-6 py-4">
+                    <span class="font-bold block ssid-name ${glitchClass}">${net.ssid}</span>
+                    <span class="text-[10px] text-secondary mono mt-1 block">${net.bssid}</span>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="text-xs font-mono text-secondary">${net.vendor}</span>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="px-2 py-1 bg-glass rounded border border-dynamic text-[9px] font-bold text-secondary uppercase">${net.channel}</span>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="flex items-end gap-1 h-5 mb-1">
+                        <div class="signal-bar rounded-full" style="height: ${b1}%; width: 3px; background: ${jammedColor}"></div>
+                        <div class="signal-bar rounded-full opacity-80" style="height: ${b2}%; width: 3px; background: ${jammedColor}"></div>
+                        <div class="signal-bar rounded-full opacity-60" style="height: ${b3}%; width: 3px; background: ${jammedColor}"></div>
+                    </div>
+                    <span class="text-[10px] text-secondary mono">${net.strength} dBm <span class="opacity-50">— ${label}</span></span>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="stat-pill px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${statClass}">${statText}</span>
+                </td>
+            `;
+            list.appendChild(row);
+        }
+
+        // ============ CSV EXPORT ============
+        function exportCSV() {
+            if (!state.currentScanList || state.currentScanList.length === 0) {
+                logTerminal("Export Failed: Run scanner to populate target list.", "error");
+                return;
+            }
+            let csv = "SSID,BSSID,Vendor,Band,Strength(dBm)\n";
+            state.currentScanList.forEach(net => {
+                csv += `"${net.ssid}","${net.bssid}","${net.vendor}","${net.channel}",${net.strength}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `voidsignal_capture_${new Date().getTime()}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            logTerminal("Exported capture log to CSV format.", "success");
+        }
+
+        // ============ SLIDER & LIVE GRAPH & HARDWARE SIMULATION ============
+        document.getElementById('jamIntensity')?.addEventListener('input', (e) => {
+            const val = e.target.value;
+            const disp = document.getElementById('jamIntensityDisplay');
+            if(disp) disp.innerText = `${val}%`;
+            
+            // Adjust radar speed based on intensity (faster = more intense)
+            const speed = 2.0 - (val / 100) * 1.5; // 0.5s to 2.0s
+            document.querySelectorAll('.radar-ring.jamming').forEach(r => r.style.animationDuration = `${speed}s`);
+            const sweep = document.getElementById('radarSweep');
+            if (sweep && state.jamming) sweep.style.animationDuration = `${Math.max(0.2, speed * 0.8)}s`;
+        });
+
+        const noiseCanvas = document.getElementById('noiseChart');
+        const noiseCtx = noiseCanvas ? noiseCanvas.getContext('2d') : null;
+        let noiseData = Array(30).fill(-96);
+
+        const tempCanvas = document.getElementById('tempChart');
+        const tempCtx = tempCanvas ? tempCanvas.getContext('2d') : null;
+        let tempData = Array(30).fill(28.5);
+
+        const batteryCanvas = document.getElementById('batteryChart');
+        const batteryCtx = batteryCanvas ? batteryCanvas.getContext('2d') : null;
+        let batteryData = Array(30).fill(100.0);
+
+        const cpuCanvas = document.getElementById('cpuChart');
+        const cpuCtx = cpuCanvas ? cpuCanvas.getContext('2d') : null;
+        let cpuData = Array(30).fill(12);
+
+        const memCanvas = document.getElementById('memChart');
+        const memCtx = memCanvas ? memCanvas.getContext('2d') : null;
+        let memData = Array(30).fill(42);
+        
+        function drawNoiseChart() {
+            if (!noiseCtx || !noiseCanvas) return;
+            const parent = noiseCanvas.parentElement;
+            noiseCanvas.width = parent.clientWidth;
+            noiseCanvas.height = parent.clientHeight;
+            
+            noiseCtx.clearRect(0, 0, noiseCanvas.width, noiseCanvas.height);
+            noiseCtx.beginPath();
+            noiseCtx.moveTo(0, noiseCanvas.height);
+            
+            const step = noiseCanvas.width / (noiseData.length - 1);
+            noiseData.forEach((val, i) => {
+                const normalized = Math.max(0, Math.min(1, (val + 100) / 90)); // Map -100..-10 to 0..1
+                const y = noiseCanvas.height - (normalized * noiseCanvas.height);
+                noiseCtx.lineTo(i * step, y);
+            });
+            
+            noiseCtx.strokeStyle = state.jamming ? '#ef4444' : '#3b82f6';
+            noiseCtx.lineWidth = 2;
+            noiseCtx.stroke();
+            
+            noiseCtx.lineTo(noiseCanvas.width, noiseCanvas.height);
+            noiseCtx.fillStyle = state.jamming ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)';
+            noiseCtx.fill();
+        }
+
+        function drawTempChart() {
+            if (!tempCtx || !tempCanvas) return;
+            const parent = tempCanvas.parentElement;
+            tempCanvas.width = parent.clientWidth;
+            tempCanvas.height = parent.clientHeight;
+            
+            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.beginPath();
+            tempCtx.moveTo(0, tempCanvas.height);
+            
+            const step = tempCanvas.width / (tempData.length - 1);
+            tempData.forEach((val, i) => {
+                const normalized = Math.max(0, Math.min(1, (val - 25) / 15)); // Map roughly 25-40 to 0-1
+                const y = tempCanvas.height - (normalized * tempCanvas.height);
+                tempCtx.lineTo(i * step, y);
+            });
+            
+            let strokeColor = '#3b82f6';
+            let fillColor = 'rgba(59, 130, 246, 0.15)';
+            if (state.temp > 36.0) {
+                strokeColor = '#ef4444';
+                fillColor = 'rgba(239, 68, 68, 0.15)';
+            } else if (state.temp > 32.0) {
+                strokeColor = '#fbbf24';
+                fillColor = 'rgba(251, 191, 36, 0.15)';
+            }
+
+            tempCtx.strokeStyle = strokeColor;
+            tempCtx.lineWidth = 2;
+            tempCtx.stroke();
+            
+            tempCtx.lineTo(tempCanvas.width, tempCanvas.height);
+            tempCtx.fillStyle = fillColor;
+            tempCtx.fill();
+        }
+
+        function drawBatteryChart() {
+            if (!batteryCtx || !batteryCanvas) return;
+            const parent = batteryCanvas.parentElement;
+            batteryCanvas.width = parent.clientWidth;
+            batteryCanvas.height = parent.clientHeight;
+            
+            batteryCtx.clearRect(0, 0, batteryCanvas.width, batteryCanvas.height);
+            batteryCtx.beginPath();
+            batteryCtx.moveTo(0, batteryCanvas.height);
+            
+            const step = batteryCanvas.width / (batteryData.length - 1);
+            batteryData.forEach((val, i) => {
+                const normalized = Math.max(0, Math.min(1, val / 100)); // Map 0-100 to 0-1
+                const y = batteryCanvas.height - (normalized * batteryCanvas.height);
+                batteryCtx.lineTo(i * step, y);
+            });
+            
+            batteryCtx.strokeStyle = '#4ade80';
+            batteryCtx.lineWidth = 2;
+            batteryCtx.stroke();
+            
+            batteryCtx.lineTo(batteryCanvas.width, batteryCanvas.height);
+            batteryCtx.fillStyle = 'rgba(74, 222, 128, 0.15)';
+            batteryCtx.fill();
+        }
+
+        function drawCpuChart() {
+            if (!cpuCtx || !cpuCanvas) return;
+            const parent = cpuCanvas.parentElement;
+            cpuCanvas.width = parent.clientWidth;
+            cpuCanvas.height = parent.clientHeight;
+            
+            cpuCtx.clearRect(0, 0, cpuCanvas.width, cpuCanvas.height);
+            cpuCtx.beginPath();
+            cpuCtx.moveTo(0, cpuCanvas.height);
+            
+            const step = cpuCanvas.width / (cpuData.length - 1);
+            cpuData.forEach((val, i) => {
+                const normalized = Math.max(0, Math.min(1, val / 100)); // Map 0-100% to 0-1
+                const y = cpuCanvas.height - (normalized * cpuCanvas.height);
+                cpuCtx.lineTo(i * step, y);
+            });
+            
+            cpuCtx.strokeStyle = '#22d3ee'; // cyan-400
+            cpuCtx.lineWidth = 2;
+            cpuCtx.stroke();
+            
+            cpuCtx.lineTo(cpuCanvas.width, cpuCanvas.height);
+            cpuCtx.fillStyle = 'rgba(34, 211, 238, 0.15)';
+            cpuCtx.fill();
+        }
+
+        function drawMemChart() {
+            if (!memCtx || !memCanvas) return;
+            const parent = memCanvas.parentElement;
+            memCanvas.width = parent.clientWidth;
+            memCanvas.height = parent.clientHeight;
+            
+            memCtx.clearRect(0, 0, memCanvas.width, memCanvas.height);
+            memCtx.beginPath();
+            memCtx.moveTo(0, memCanvas.height);
+            
+            const step = memCanvas.width / (memData.length - 1);
+            memData.forEach((val, i) => {
+                const normalized = Math.max(0, Math.min(1, val / 100)); // Map 0-100% to 0-1
+                const y = memCanvas.height - (normalized * memCanvas.height);
+                memCtx.lineTo(i * step, y);
+            });
+            
+            memCtx.strokeStyle = '#818cf8'; // indigo-400
+            memCtx.lineWidth = 2;
+            memCtx.stroke();
+            
+            memCtx.lineTo(memCanvas.width, memCanvas.height);
+            memCtx.fillStyle = 'rgba(129, 140, 248, 0.15)';
+            memCtx.fill();
+        }
+
+        // ============ INTERACTIVE CONCEPT SIMULATOR ============
+        const cCanvas = document.getElementById('conceptCanvas');
+        let cCtx = cCanvas ? cCanvas.getContext('2d') : null;
+        let cState = {
+            jamming: false,
+            packets: [],
+            waves: [],
+            sent: 0,
+            signal: 100
+        };
+
+        function resizeConceptCanvas() {
+            if (cCanvas && cCanvas.parentElement) {
+                cCanvas.width = cCanvas.parentElement.clientWidth;
+                cCanvas.height = cCanvas.parentElement.clientHeight;
+            }
+        }
+        window.addEventListener('resize', resizeConceptCanvas);
+        setTimeout(resizeConceptCanvas, 200);
+
+        function toggleConceptJam(isActive) {
+            cState.jamming = isActive;
+            const statusEl = document.getElementById('cStatus');
+            const signalEl = document.getElementById('cSignal');
+            
+            if (isActive) {
+                statusEl.innerText = 'DISCONNECTED';
+                statusEl.className = 'text-red-500 font-bold text-xs mt-1 transition-colors';
+                signalEl.innerText = '0%';
+                signalEl.className = 'text-red-500 font-bold text-xs mt-1 transition-colors';
+                cState.signal = 0;
+            } else {
+                statusEl.innerText = 'CONNECTED';
+                statusEl.className = 'text-green-400 font-bold text-xs mt-1 transition-colors';
+                signalEl.innerText = '100%';
+                signalEl.className = 'text-primary font-bold text-xs mt-1 transition-colors';
+                cState.signal = 100;
+            }
+        }
+
+        function resetConcept() {
+            cState.packets = [];
+            cState.waves = [];
+            cState.sent = 0;
+            document.getElementById('cPackets').innerText = '0';
+        }
+
+        let lastPacketTime = 0;
+        let lastWaveTime = 0;
+
+        function animateConceptSim(time) {
+            requestAnimationFrame(animateConceptSim);
+            const introTab = document.getElementById('tab-intro');
+            if (!introTab || !introTab.classList.contains('active') || !cCtx || !cCanvas.width) return;
+
+            cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+            
+            const w = cCanvas.width;
+            const h = cCanvas.height;
+            const isLight = document.body.classList.contains('light-mode');
+            const textColor = isLight ? '#0f172a' : '#ffffff';
+            const nodeColor = isLight ? '#475569' : '#94a3b8';
+
+            // Coordinates
+            const rx = w * 0.15; const ry = h * 0.5; // Router
+            const jx = w * 0.5; const jy = h * 0.85; // Jammer
+
+            const targets = [
+                { id: 1, x: w * 0.85, y: h * 0.2, name: 'LAPTOP' },
+                { id: 2, x: w * 0.85, y: h * 0.5, name: 'PHONE 1' },
+                { id: 3, x: w * 0.85, y: h * 0.8, name: 'PHONE 2' }
+            ];
+
+            // Spawn Packets
+            if (time - lastPacketTime > 150) { // Spawning faster for multiple targets
+                const target = targets[Math.floor(Math.random() * targets.length)];
+                
+                // Calculate trajectory
+                const dx = target.x - (rx + 35);
+                const dy = target.y - ry;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const speed = 3;
+
+                cState.packets.push({ 
+                    x: rx + 35, y: ry, 
+                    jammed: false, 
+                    vx: (dx / dist) * speed, 
+                    vy: (dy / dist) * speed, 
+                    life: 1,
+                    tx: target.x, ty: target.y
+                });
+                
+                lastPacketTime = time;
+                cState.sent++;
+                const pEl = document.getElementById('cPackets');
+                if(pEl) pEl.innerText = cState.sent;
+            }
+
+            // Spawn Jam Waves
+            if (cState.jamming && time - lastWaveTime > 400) {
+                cState.waves.push({ r: 5, alpha: 0.8 });
+                lastWaveTime = time;
+            }
+
+            // Update & Draw Waves
+            cState.waves.forEach((wv, i) => {
+                cCtx.beginPath();
+                cCtx.arc(jx, jy - 15, wv.r, 0, Math.PI * 2);
+                cCtx.strokeStyle = `rgba(239, 68, 68, ${wv.alpha})`;
+                cCtx.lineWidth = 2.5;
+                cCtx.stroke();
+                wv.r += 2.5;
+                wv.alpha -= 0.008;
+                if (wv.alpha <= 0) cState.waves.splice(i, 1);
+            });
+
+            // Update & Draw Packets
+            cState.packets.forEach((p, i) => {
+                // Jamming collision zone (middle 30% of screen)
+                if (cState.jamming && p.x > w * 0.35 && p.x < w * 0.65 && !p.jammed) {
+                    p.jammed = true;
+                    // Scatter randomly
+                    p.vx = (Math.random() - 0.5) * 4;
+                    p.vy = (Math.random() - 0.5) * 4;
+                }
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                if (p.jammed) {
+                    p.life -= 0.02; // Fade out jammed packets
+                }
+
+                const distToTarget = Math.sqrt(Math.pow(p.x - p.tx, 2) + Math.pow(p.y - p.ty, 2));
+
+                if (distToTarget < 15 || p.life <= 0 || p.x > w || p.y < 0 || p.y > h) {
+                    cState.packets.splice(i, 1);
+                } else {
+                    cCtx.fillStyle = p.jammed ? `rgba(239, 68, 68, ${p.life})` : `rgba(147, 197, 253, ${p.life})`;
+                    // Draw a little square for the packet
+                    cCtx.fillRect(p.x - 4, p.y - 4, 8, 8);
+                }
+            });
+
+            // --- Draw Nodes ---
+            cCtx.textAlign = 'center';
+            cCtx.font = 'bold 11px Space Grotesk, sans-serif';
+
+            // 1. Router
+            cCtx.fillStyle = textColor; cCtx.fillText('ROUTER', rx, ry + 40);
+            cCtx.strokeStyle = nodeColor; cCtx.lineWidth = 2;
+            cCtx.beginPath(); cCtx.roundRect(rx - 30, ry - 15, 60, 30, 8); cCtx.stroke();
+            // Router dots
+            cCtx.fillStyle = nodeColor;
+            cCtx.beginPath(); cCtx.arc(rx - 10, ry, 2, 0, Math.PI*2); cCtx.fill();
+            cCtx.beginPath(); cCtx.arc(rx, ry, 2, 0, Math.PI*2); cCtx.fill();
+            cCtx.beginPath(); cCtx.arc(rx + 10, ry, 2, 0, Math.PI*2); cCtx.fill();
+            // Router Antenna
+            cCtx.beginPath(); cCtx.moveTo(rx - 15, ry - 15); cCtx.lineTo(rx - 15, ry - 25); cCtx.stroke();
+            cCtx.beginPath(); cCtx.arc(rx - 15, ry - 25, 8, Math.PI*1.1, Math.PI*1.9); cCtx.stroke();
+
+            // 2. Client Devices
+            targets.forEach(t => {
+                cCtx.fillStyle = textColor; cCtx.fillText(t.name, t.x, t.y + 40);
+                cCtx.strokeStyle = nodeColor;
+                
+                if (t.name === 'LAPTOP') {
+                    // Draw Laptop
+                    cCtx.beginPath(); cCtx.roundRect(t.x - 20, t.y - 20, 40, 25, 4); cCtx.stroke(); // Screen
+                    cCtx.beginPath(); cCtx.roundRect(t.x - 25, t.y + 5, 50, 8, 2); cCtx.stroke(); // Base
+                    cCtx.fillStyle = nodeColor; cCtx.beginPath(); cCtx.arc(t.x, t.y + 9, 1.5, 0, Math.PI*2); cCtx.fill(); // Trackpad
+                } else {
+                    // Draw Phone
+                    cCtx.beginPath(); cCtx.roundRect(t.x - 15, t.y - 25, 30, 45, 6); cCtx.stroke();
+                    cCtx.beginPath(); cCtx.arc(t.x, t.y + 12, 2.5, 0, Math.PI*2); cCtx.fillStyle = nodeColor; cCtx.fill();
+                }
+            });
+
+            // 3. Jammer
+            cCtx.fillStyle = cState.jamming ? '#ef4444' : textColor; 
+            cCtx.fillText(cState.jamming ? 'JAMMER ACTIVE' : 'JAMMER STANDBY', jx, jy + 25);
+            cCtx.strokeStyle = cState.jamming ? '#ef4444' : nodeColor;
+            cCtx.beginPath(); cCtx.roundRect(jx - 50, jy - 14, 100, 26, 13); cCtx.stroke();
+            // Jammer Antenna Icon
+            cCtx.beginPath(); cCtx.arc(jx, jy - 22, 3, 0, Math.PI*2); cCtx.stroke();
+            cCtx.beginPath(); cCtx.arc(jx, jy - 22, 10, Math.PI*1.15, Math.PI*1.85); cCtx.stroke();
+            cCtx.beginPath(); cCtx.arc(jx, jy - 22, 18, Math.PI*1.15, Math.PI*1.85); cCtx.stroke();
+        }
+        
+        requestAnimationFrame(animateConceptSim);
+
+        // ============ EDUCATIONAL GRAPHS ============
+        function drawEducationalGraphs() {
+            // Colors from theme
+            const isLight = document.body.classList.contains('light-mode');
+            const axisColor = isLight ? '#cbd5e1' : '#334155';
+            const textCol = isLight ? '#64748b' : '#94a3b8';
+
+            // 1. Signal vs Distance
+            const cSig = document.getElementById('eduSignalChart');
+            if (cSig && cSig.parentElement) {
+                cSig.width = cSig.parentElement.clientWidth - 32;
+                cSig.height = 80;
+                const ctxSig = cSig.getContext('2d');
+                ctxSig.clearRect(0,0, cSig.width, cSig.height);
+                ctxSig.beginPath();
+                for(let x=0; x<=cSig.width; x+=2) {
+                    let d = (x / cSig.width) * 10 + 1; // distance 1 to 11
+                    let y = cSig.height - (100 / (d * d)) * (cSig.height / 100);
+                    ctxSig.lineTo(x, Math.min(y, cSig.height-2));
+                }
+                ctxSig.strokeStyle = '#3b82f6'; ctxSig.lineWidth = 2; ctxSig.stroke();
+            }
+
+            // 2. SNR
+            const cSnr = document.getElementById('eduSnrChart');
+            if (cSnr && cSnr.parentElement) {
+                cSnr.width = cSnr.parentElement.clientWidth - 32;
+                cSnr.height = 80;
+                const ctxSnr = cSnr.getContext('2d');
+                ctxSnr.clearRect(0,0, cSnr.width, cSnr.height);
+                // Noise floor
+                ctxSnr.beginPath();
+                for(let x=0; x<=cSnr.width; x+=5) ctxSnr.lineTo(x, cSnr.height - 15 + Math.random()*5);
+                ctxSnr.lineTo(cSnr.width, cSnr.height); ctxSnr.lineTo(0, cSnr.height);
+                ctxSnr.fillStyle = 'rgba(239, 68, 68, 0.2)'; ctxSnr.fill();
+                // Signal line
+                ctxSnr.beginPath();
+                for(let x=0; x<=cSnr.width; x+=5) ctxSnr.lineTo(x, 20 + Math.sin(x/20)*10);
+                ctxSnr.strokeStyle = '#4ade80'; ctxSnr.lineWidth = 2; ctxSnr.stroke();
+                // Label
+                ctxSnr.fillStyle = textCol; ctxSnr.font = '10px monospace';
+                ctxSnr.fillText('Signal', 5, 12); ctxSnr.fillText('Noise', 5, cSnr.height - 5);
+            }
+
+            // 3. Throughput vs Distance
+            const cThr = document.getElementById('eduThroughputChart');
+            if (cThr && cThr.parentElement) {
+                cThr.width = cThr.parentElement.clientWidth - 32;
+                cThr.height = 80;
+                const ctxThr = cThr.getContext('2d');
+                ctxThr.clearRect(0,0, cThr.width, cThr.height);
+                ctxThr.beginPath();
+                ctxThr.moveTo(0, 10);
+                const steps = 5;
+                for(let i=0; i<steps; i++) {
+                    let startX = (cThr.width / steps) * i;
+                    let endX = (cThr.width / steps) * (i + 1);
+                    let y = 10 + (cThr.height / steps) * i;
+                    ctxThr.lineTo(startX, y); ctxThr.lineTo(endX, y);
+                }
+                ctxThr.strokeStyle = '#06b6d4'; ctxThr.lineWidth = 2; ctxThr.stroke();
+            }
+
+            // 4. Overlap
+            const cOvl = document.getElementById('eduOverlapChart');
+            if (cOvl && cOvl.parentElement) {
+                cOvl.width = cOvl.parentElement.clientWidth - 32;
+                cOvl.height = 80;
+                const ctxOvl = cOvl.getContext('2d');
+                ctxOvl.clearRect(0,0, cOvl.width, cOvl.height);
+                
+                const drawBell = (x, w, col) => {
+                    ctxOvl.beginPath();
+                    ctxOvl.moveTo(x - w, cOvl.height);
+                    ctxOvl.bezierCurveTo(x - w/2, cOvl.height, x - w/2, 10, x, 10);
+                    ctxOvl.bezierCurveTo(x + w/2, 10, x + w/2, cOvl.height, x + w, cOvl.height);
+                    ctxOvl.fillStyle = col; ctxOvl.fill();
+                    ctxOvl.strokeStyle = col.replace('0.3','0.8'); ctxOvl.stroke();
+                };
+                let w = cOvl.width / 4;
+                drawBell(cOvl.width*0.2, w, 'rgba(59, 130, 246, 0.3)'); // Ch1
+                drawBell(cOvl.width*0.5, w, 'rgba(59, 130, 246, 0.3)'); // Ch6
+                drawBell(cOvl.width*0.8, w, 'rgba(59, 130, 246, 0.3)'); // Ch11
+                drawBell(cOvl.width*0.35, w, 'rgba(239, 68, 68, 0.2)'); // Interference
+            }
+
+            // 5. Topology
+            const cTop = document.getElementById('eduTopologyChart');
+            if (cTop && cTop.parentElement) {
+                cTop.width = cTop.parentElement.clientWidth - 32;
+                cTop.height = 80;
+                const ctxTop = cTop.getContext('2d');
+                ctxTop.clearRect(0,0, cTop.width, cTop.height);
+                
+                const cx = cTop.width / 2; const cy = cTop.height / 2;
+                const nodes = [-0.8, -0.3, 0.2, 0.7, 1.2, 1.7].map(a => ({
+                    x: cx + Math.cos(a * Math.PI) * (cTop.width/3),
+                    y: cy + Math.sin(a * Math.PI) * (cTop.height/2.5)
+                }));
+                
+                ctxTop.strokeStyle = axisColor; ctxTop.lineWidth = 1;
+                nodes.forEach(n => {
+                    ctxTop.beginPath(); ctxTop.moveTo(cx, cy); ctxTop.lineTo(n.x, n.y); ctxTop.stroke();
+                });
+                
+                // Draw AP
+                ctxTop.beginPath(); ctxTop.arc(cx, cy, 12, 0, Math.PI*2);
+                ctxTop.fillStyle = '#3b82f6'; ctxTop.fill();
+                
+                // Draw Clients
+                ctxTop.fillStyle = isLight ? '#94a3b8' : '#cbd5e1';
+                nodes.forEach(n => {
+                    ctxTop.beginPath(); ctxTop.arc(n.x, n.y, 5, 0, Math.PI*2); ctxTop.fill();
+                });
+            }
+        }
+
+
+        // Main Hardware Loop
+        setInterval(() => {
+            const tempDisplay = document.getElementById('tempDisplay');
+            const batteryDisplay = document.getElementById('batteryDisplay');
+            const tempPanel = document.getElementById('tempPanel');
+            const rxEl = document.getElementById('rxPackets');
+            const txEl = document.getElementById('txPackets');
+            const cpuDisplay = document.getElementById('cpuDisplay');
+            const memDisplay = document.getElementById('memDisplay');
+
+            // 1. Noise Chart
+            if(state.jamming) {
+                const intensityStr = document.getElementById('jamIntensity')?.value || 80;
+                const intensity = parseInt(intensityStr, 10);
+                const baseNoise = -50 + (intensity / 100) * 45; // -50 to -5
+                noiseData.push(baseNoise + (Math.random() * 12 - 6));
+            } else if (state.scanning) {
+                noiseData.push(-85 + (Math.random() * 15));
+            } else {
+                noiseData.push(-96 + (Math.random() * 2));
+            }
+            noiseData.shift();
+            drawNoiseChart();
+            
+            const currentNoise = Math.round(noiseData[noiseData.length-1]);
+            const noiseEl = document.getElementById('noise');
+            if(noiseEl) noiseEl.innerHTML = `${currentNoise} <span class="text-[9px] text-secondary">dBm</span>`;
+
+            // 2. Hardware Simulation (Temp & Power)
+            if (state.jamming) {
+                state.temp += (Math.random() * 0.15 + 0.05); // Heat up during jam
+                if (state.temp > 38.0) state.temp = 38.0 - (Math.random() * 0.5); // Cap temp up to 38
+                state.battery -= 0.05 * (parseInt(document.getElementById('jamIntensity')?.value || 80) / 50);
+            } else if (state.scanning) {
+                state.temp += (Math.random() * 0.1 - 0.02);
+                if (state.temp > 33.0) state.temp -= (Math.random() * 0.1 + 0.05); // Cap scanning around 33
+                if (state.temp < 28.0) state.temp += 0.1;
+                state.battery -= 0.01;
+            } else {
+                state.temp -= 0.1; // Cool down
+                if (state.temp < 28.0) {
+                    state.temp = 28.0 + (Math.random() * 0.8); // Bounce up if below 28
+                } else if (state.temp < 29.0) {
+                    state.temp += (Math.random() * 0.2 - 0.1); // Keep varying around 28
+                }
+            }
+            if (state.battery < 0) state.battery = 0;
+
+            tempData.push(state.temp);
+            tempData.shift();
+            drawTempChart();
+
+            batteryData.push(state.battery);
+            batteryData.shift();
+            drawBatteryChart();
+
+            if (tempDisplay) tempDisplay.innerHTML = `${state.temp.toFixed(1)}<span class="text-[12px] text-secondary z-10 relative">°C</span>`;
+            if (batteryDisplay) batteryDisplay.innerHTML = `${state.battery.toFixed(1)}<span class="text-[12px] text-secondary z-10 relative">%</span>`;
+
+            // Temp Warnings (Updated for new 28-38 range)
+            if (state.temp > 36.0) {
+                tempDisplay.classList.replace('text-primary', 'text-red-400');
+                tempDisplay.classList.replace('text-amber-400', 'text-red-400');
+                tempPanel.classList.add('border-red-500/30', 'bg-red-500/5');
+            } else if (state.temp > 32.0) {
+                tempDisplay.classList.replace('text-primary', 'text-amber-400');
+                tempDisplay.classList.replace('text-red-400', 'text-amber-400');
+                tempPanel.classList.remove('border-red-500/30', 'bg-red-500/5');
+                tempPanel.classList.add('border-amber-500/30', 'bg-amber-500/5');
+            } else {
+                tempDisplay.classList.replace('text-red-400', 'text-primary');
+                tempDisplay.classList.replace('text-amber-400', 'text-primary');
+                tempPanel.classList.remove('border-red-500/30', 'bg-red-500/5', 'border-amber-500/30', 'bg-amber-500/5');
+            }
+
+            // 3. CPU & Memory Charts
+            let targetCpu, targetMem;
+            if (state.jamming) {
+                targetCpu = 85 + Math.random() * 14; // 85-99%
+                targetMem = 65 + Math.random() * 15; // 65-80%
+            } else if (state.scanning) {
+                targetCpu = 45 + Math.random() * 20; // 45-65%
+                targetMem = 45 + Math.random() * 10; // 45-55%
+            } else {
+                targetCpu = 8 + Math.random() * 8;   // 8-16%
+                targetMem = 38 + Math.random() * 4;  // 38-42%
+            }
+
+            cpuData.push(targetCpu);
+            cpuData.shift();
+            drawCpuChart();
+
+            memData.push(targetMem);
+            memData.shift();
+            drawMemChart();
+
+            if (cpuDisplay) cpuDisplay.innerText = `${Math.round(targetCpu)}%`;
+            if (memDisplay) memDisplay.innerText = `${Math.round(targetMem)}%`;
+
+            // 4. Packet Counter
+            if (state.scanning) {
+                state.rxPackets += Math.floor(Math.random() * 140);
+                if (rxEl) rxEl.innerText = state.rxPackets.toLocaleString();
+            }
+            if (state.jamming) {
+                const intensity = parseInt(document.getElementById('jamIntensity')?.value || 80);
+                state.txPackets += Math.floor(Math.random() * 800 * (intensity/50));
+                if (txEl) txEl.innerText = state.txPackets.toLocaleString();
+            }
+
+        }, 150);
+
+    </script>
+</body>
+</html>
